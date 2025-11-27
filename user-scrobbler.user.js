@@ -69,7 +69,7 @@ async function scrobble(event) {
         method: "track.scrobble",
         artist: event.data.artist,
         track: event.data.title,
-        timestamp: event.data.timestamp ?? Math.round(new Date().getTime() / 1000),
+        timestamp: event.data.timestamp ? new Date(event.data.timestamp).getUTCSeconds() : Math.round(new Date().getTime() / 1000),
         sk: session,
         api_key: API_KEY
     }
