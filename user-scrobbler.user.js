@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         Simple Scrobbler
-// @version      0.0.1
+// @version      0.0.2
 // @namespace    https://github.com/deevroman/user-scrobbler
 // @updateURL    https://github.com/deevroman/user-scrobbler/raw/master/user-scrobbler.user.js
 // @downloadURL  https://github.com/deevroman/user-scrobbler/raw/master/user-scrobbler.user.js
@@ -89,6 +89,9 @@ async function scrobble(event) {
         responseType: "xml"
     })
     console.debug(res.response)
+    if (document.querySelector('lfm[status="ok"]')) {
+        alert("ok")
+    }
 }
 
 function _setupMenuButtons() {
@@ -102,7 +105,9 @@ function _setupMenuButtons() {
 
     GM_registerMenuCommand("Scrobble!", function() {
         injectJSIntoPage(`
-        debugger
+        if (!navigator.mediaSession.metadata) {
+            alert("Nothing is playing on this tab.")
+        }
         window.postMessage({
             type: "scrobble",
             username: window.username,
