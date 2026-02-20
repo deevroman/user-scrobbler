@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         Simple Scrobbler
-// @version      0.0.2
+// @version      0.0.3
 // @namespace    https://github.com/deevroman/user-scrobbler
 // @updateURL    https://github.com/deevroman/user-scrobbler/raw/master/user-scrobbler.user.js
 // @downloadURL  https://github.com/deevroman/user-scrobbler/raw/master/user-scrobbler.user.js
@@ -9,7 +9,6 @@
 // @match        https://deevroman.github.io/user-scrobbler*
 // @match        https://www.last.fm/*
 // @match        https://music.yandex.ru/*
-// @match        https://radio.vas3k.club/*
 // @require      https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.0.0/core.min.js
 // @require      https://cdnjs.cloudflare.com/ajax/libs/crypto-js/3.1.9-1/md5.js
 // @grant        GM.getValue
@@ -63,13 +62,25 @@ function signReq(req) {
     return Object.assign(req, { api_sig: getSign(req) })
 }
 
+/**
+ * @param {{data: {
+ *     artist: string,
+ *     title: string,
+ *     album: string|undefined,
+ *     timestamp: string,
+ *     duration: string|undefined,
+ * }}} event
+ * @return {Promise<void>}
+ */
 async function scrobble(event) {
     console.debug("scrobble")
     const request = {
         method: "track.scrobble",
         artist: event.data.artist,
         track: event.data.title,
-        timestamp: event.data.timestamp ? new Date(event.data.timestamp).getUTCSeconds() : Math.round(new Date().getTime() / 1000),
+        timestamp: event.data.timestamp
+            ? Math.round(new Date(event.data.timestamp).getTime() / 1000)
+            : Math.round(new Date().getTime() / 1000),
         sk: session,
         api_key: API_KEY
     }
@@ -89,8 +100,15 @@ async function scrobble(event) {
         responseType: "xml"
     })
     console.debug(res.response)
-    if (document.querySelector('lfm[status="ok"]')) {
-        alert("ok")
+    const xml = new DOMParser().parseFromString(res.response, "text/html")
+    if (xml.querySelector('lfm[status="ok"]')) {
+        if (xml.querySelector('[accepted="1"]')) {
+            console.log("ok")
+        } else {
+            alert("ignored")
+        }
+    } else {
+        alert("failed")
     }
 }
 
@@ -197,8 +215,8 @@ function setupBulkScrobbler() {
                         i.match(/^(?<artist>.+?);(?<title>.+?);(?<album>.+?)(;(?<timestamp>.+?))?(;(?<duration>.+?))?$/)
                             .groups
                 )
-            for (let i = 0; i < scrobbles.length; i++){
-                const s = scrobbles[i];
+            for (let i = 0; i < scrobbles.length; i++) {
+                const s = scrobbles[i]
                 console.log(i, s)
                 await scrobble({
                     data: s
@@ -270,7 +288,7 @@ function setupTools() {
 
     window.addEventListener("message", async function(event) {
         if (!event.data.username) return
-        console.log(event.data)
+        console.log("received message:", event.data)
         if (event.data.type === "scrobble") {
             await scrobble(event)
             return
@@ -298,6 +316,26 @@ function setupTools() {
     })
 
     injectJSIntoPage(`
+    let pendingScrobble = null;
+    let lastNowPlayingSentAt = 0;
+
+    function cloneMetadata(md) {
+        if (!md) return null;
+        return {
+            artist: md.artist,
+            title: md.title,
+            album: md.album
+        };
+    }
+
+    function metadataEquals(a, b) {
+        if (!a || !b) return false;
+        return (
+            a.artist === b.artist &&
+            a.title === b.title &&
+            a.album === b.album
+        );
+    }
 
     function wrapMediaMetadata(onChange) {
         let _metadata = null;
@@ -318,14 +356,72 @@ function setupTools() {
     }
 
     wrapMediaMetadata((newMetadata) => {
-        window.postMessage({
-            username: window.username,
-            artist: navigator.mediaSession.metadata.artist,
-            title: navigator.mediaSession.metadata.title,
-            album: navigator.mediaSession.metadata.album
-        }, '*')
-        console.log(newMetadata)
-    })
+        if (!newMetadata) {
+            pendingScrobble = null;
+            return;
+        }
+
+        const cloned = cloneMetadata(newMetadata);
+
+        const now = Date.now();
+        if (now - lastNowPlayingSentAt >= 1000) {
+            window.postMessage({
+                type: "nowplaying",
+                username: window.username,
+                artist: cloned.artist,
+                title: cloned.title,
+                album: cloned.album
+            }, "*");
+
+            lastNowPlayingSentAt = now;
+        } else {
+            console.log("rate limited nowplaying", cloned)
+            return
+        }
+
+        pendingScrobble = {
+            metadata: cloned,
+            startedAt: Math.round(Date.now() / 1000)
+        };
+
+        console.log("Now playing:", cloned);
+    });
+
+    setInterval(() => {
+        console.log("checking...");
+        if (!pendingScrobble) return;
+        if (!navigator.mediaSession.metadata) {
+            pendingScrobble = null;
+            return;
+        }
+
+        const current = cloneMetadata(navigator.mediaSession.metadata);
+
+        if (!metadataEquals(current, pendingScrobble.metadata)) {
+            console.log("Track changed — reset timer");
+            pendingScrobble = null;
+            return;
+        }
+
+        const diffSeconds = (Math.round(Date.now() / 1000) - pendingScrobble.startedAt);
+    
+        if (diffSeconds >= 120) {
+            console.log("120 seconds passed — scrobbling", diffSeconds);
+
+            window.postMessage({
+                type: "scrobble",
+                username: window.username,
+                artist: current.artist,
+                title: current.title,
+                album: current.album,
+            }, "*");
+
+            pendingScrobble = null;
+        } else {
+            console.log("120 seconds not passed. Only", diffSeconds);
+        }
+
+    }, 10000);
 
     `)
 
