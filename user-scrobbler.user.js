@@ -405,8 +405,8 @@ function setupTools() {
 
         const diffSeconds = (Math.round(Date.now() / 1000) - pendingScrobble.startedAt);
     
-        if (diffSeconds >= 120) {
-            console.log("120 seconds passed — scrobbling", diffSeconds);
+        if (diffSeconds >= 100) {
+            console.log("100 seconds passed — scrobbling", diffSeconds);
 
             window.postMessage({
                 type: "scrobble",
@@ -418,7 +418,7 @@ function setupTools() {
 
             pendingScrobble = null;
         } else {
-            console.log("120 seconds not passed. Only", diffSeconds);
+            console.log("100 seconds not passed. Only", diffSeconds);
         }
 
     }, 10000);
