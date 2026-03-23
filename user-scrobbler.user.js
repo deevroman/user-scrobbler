@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         Simple Scrobbler
-// @version      0.0.3
+// @version      0.0.4
 // @namespace    https://github.com/deevroman/user-scrobbler
 // @updateURL    https://github.com/deevroman/user-scrobbler/raw/master/user-scrobbler.user.js
 // @downloadURL  https://github.com/deevroman/user-scrobbler/raw/master/user-scrobbler.user.js
@@ -100,6 +100,10 @@ async function scrobble(event) {
         responseType: "xml"
     })
     console.debug(res.response)
+    if (res.status !== 200) {
+        alert("failed: " + res.status)
+        return
+    }
     const xml = new DOMParser().parseFromString(res.response, "text/html")
     if (xml.querySelector('lfm[status="ok"]')) {
         if (xml.querySelector('[accepted="1"]')) {
