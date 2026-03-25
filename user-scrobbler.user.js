@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         Simple Scrobbler
-// @version      0.0.4
+// @version      0.0.5
 // @namespace    https://github.com/deevroman/user-scrobbler
 // @updateURL    https://github.com/deevroman/user-scrobbler/raw/master/user-scrobbler.user.js
 // @downloadURL  https://github.com/deevroman/user-scrobbler/raw/master/user-scrobbler.user.js
@@ -17,6 +17,7 @@
 // @grant        GM_registerMenuCommand
 // @grant        GM_addElement
 // @grant        GM_info
+// @run-at       document-start
 // ==/UserScript==
 /* global GM */
 /* global GM.getValue */
