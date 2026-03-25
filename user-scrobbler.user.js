@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         Simple Scrobbler
-// @version      0.0.5
+// @version      0.0.6
 // @namespace    https://github.com/deevroman/user-scrobbler
 // @updateURL    https://github.com/deevroman/user-scrobbler/raw/master/user-scrobbler.user.js
 // @downloadURL  https://github.com/deevroman/user-scrobbler/raw/master/user-scrobbler.user.js
@@ -361,14 +361,19 @@ function setupTools() {
     }
 
     wrapMediaMetadata((newMetadata) => {
+        const now = Date.now();
         if (!newMetadata) {
-            pendingScrobble = null;
+            if (now - lastNowPlayingSentAt >= 1000) {
+                console.log("!newMetadata: pendingScrobble = null")
+                pendingScrobble = null;
+            } else {
+                console.debug("skip pendingScrobble = null")
+            }
             return;
         }
 
         const cloned = cloneMetadata(newMetadata);
 
-        const now = Date.now();
         if (now - lastNowPlayingSentAt >= 1000) {
             window.postMessage({
                 type: "nowplaying",
@@ -383,7 +388,7 @@ function setupTools() {
             console.log("rate limited nowplaying", cloned)
             return
         }
-
+        console.log("new pendingScrobble")
         pendingScrobble = {
             metadata: cloned,
             startedAt: Math.round(Date.now() / 1000)
@@ -396,6 +401,7 @@ function setupTools() {
         console.log("checking...");
         if (!pendingScrobble) return;
         if (!navigator.mediaSession.metadata) {
+            console.debug("setInterval: pendingScrobble = null")
             pendingScrobble = null;
             return;
         }
@@ -420,7 +426,8 @@ function setupTools() {
                 title: current.title,
                 album: current.album,
             }, "*");
-
+            
+            console.log("pendingScrobble = null after postMessage scrobble");
             pendingScrobble = null;
         } else {
             console.log("100 seconds not passed. Only", diffSeconds);
