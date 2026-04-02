@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         Simple Scrobbler
-// @version      0.0.6
+// @version      0.0.7
 // @namespace    https://github.com/deevroman/user-scrobbler
 // @updateURL    https://github.com/deevroman/user-scrobbler/raw/master/user-scrobbler.user.js
 // @downloadURL  https://github.com/deevroman/user-scrobbler/raw/master/user-scrobbler.user.js
@@ -69,7 +69,7 @@ function signReq(req) {
  *     title: string,
  *     album: string|undefined,
  *     timestamp: string,
- *     duration: string|undefined,
+ *     duration: string|number|undefined,
  * }}} event
  * @return {Promise<void>}
  */
@@ -89,7 +89,7 @@ async function scrobble(event) {
         request["album"] = event.data.album
     }
     if (event.data.duration) {
-        request["duration"] = event.data.duration
+        request["duration"] = parseInt(event.data.duration)
     }
     const res = await GM.xmlHttpRequest({
         url: API_BASE,
@@ -360,6 +360,30 @@ function setupTools() {
         });
     }
 
+    let lastDuration = null;
+    
+    function wrapSetPositionState() {
+        const originalSetPositionState = navigator.mediaSession.setPositionState;
+
+        if (typeof originalSetPositionState !== "function") {
+            console.debug("mediaSession.setPositionState is not available");
+            return;
+        }
+
+        navigator.mediaSession.setPositionState = function(state) {
+            console.log("mediaSession.setPositionState called with:", state);
+            lastDuration = state?.duration
+            try {
+                return originalSetPositionState.call(this, state);
+            } catch (e) {
+                console.error("mediaSession.setPositionState failed:", e);
+                throw e;
+            }
+        };
+    }
+
+    wrapSetPositionState();
+
     wrapMediaMetadata((newMetadata) => {
         const now = Date.now();
         if (!newMetadata) {
@@ -416,8 +440,9 @@ function setupTools() {
 
         const diffSeconds = (Math.round(Date.now() / 1000) - pendingScrobble.startedAt);
     
-        if (diffSeconds >= 100) {
-            console.log("100 seconds passed — scrobbling", diffSeconds);
+        const needSeconds = lastDuration < 120 ? 80 : 100
+        if (diffSeconds >= needSeconds) {
+            console.log(needSeconds + " seconds passed — scrobbling", diffSeconds);
 
             window.postMessage({
                 type: "scrobble",
@@ -430,7 +455,7 @@ function setupTools() {
             console.log("pendingScrobble = null after postMessage scrobble");
             pendingScrobble = null;
         } else {
-            console.log("100 seconds not passed. Only", diffSeconds);
+            console.log(needSeconds + " seconds not passed. Only", diffSeconds);
         }
 
     }, 10000);
